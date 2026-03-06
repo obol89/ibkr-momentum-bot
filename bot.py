@@ -177,13 +177,43 @@ class MomentumBot:
         self._run_rebalance()
 
     def _heartbeat(self) -> None:
-        """Daily health check: verify IBKR connection."""
+        """Daily heartbeat: skip on rebalance day, otherwise send status to Telegram."""
+        today = date.today()
+        ftd = get_first_trading_day(today.year, today.month)
+        if today == ftd:
+            logger.info("Heartbeat skipped: rebalance day (full message already sent)")
+            return
+
+        # Verify IBKR connection
+        ibkr_connected = False
         try:
             self.client.ensure_connected()
+            ibkr_connected = self.client.is_connected()
             logger.info("Heartbeat OK: IBKR connected")
         except Exception:
             logger.error("Heartbeat FAILED: IBKR connection lost", exc_info=True)
             notifier.send_error("IBKR connection lost! Heartbeat check failed.")
+
+        # Refresh state before sending heartbeat
+        self.refresh_state()
+
+        s = self._state
+        cash_chf = s["cash_usd"] * s["usd_chf_rate"]
+        next_rebal = get_next_rebalance_date()
+
+        msg = notifier.format_heartbeat(
+            now=datetime.utcnow(),
+            spy_ret=s["last_spy_ret"],
+            ief_ret=s["last_ief_ret"],
+            is_defensive=s["is_defensive"],
+            portfolio_value_chf=s["portfolio_value_chf"],
+            num_positions=len(s["positions"]),
+            cash_chf=cash_chf,
+            ibkr_connected=ibkr_connected,
+            next_rebalance=next_rebal.isoformat(),
+            paper=config.PAPER_TRADING,
+        )
+        notifier.send_message(msg)
 
     def refresh_state(self) -> None:
         """Fetch live data from IBKR and update cached _state.

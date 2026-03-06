@@ -149,6 +149,48 @@ def format_startup(
     )
 
 
+def format_heartbeat(
+    now: datetime,
+    spy_ret: float,
+    ief_ret: float,
+    is_defensive: bool,
+    portfolio_value_chf: Decimal,
+    num_positions: int,
+    cash_chf: Decimal,
+    ibkr_connected: bool,
+    next_rebalance: str,
+    paper: bool,
+) -> str:
+    """Format the daily heartbeat message."""
+    bar = "\u2501" * 20
+    paper_tag = " [PAPER]" if paper else ""
+    mode_str = "DEFENSIVE \u274c" if is_defensive else "MOMENTUM \u2705"
+    conn_str = "Connected \u2705" if ibkr_connected else "DISCONNECTED \u274c"
+    day_str = now.strftime("%a %d %b %Y")
+    time_str = now.strftime("%H:%M UTC")
+
+    return (
+        f"{bar}\n"
+        f"\U0001f493 IBKR Bot \u2014 Daily Heartbeat\n"
+        f"{bar}\n"
+        f"\U0001f4c5 {day_str} | {time_str}\n"
+        f"\n"
+        f"\U0001f4ca Market Signal\n"
+        f"   SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
+        f"   Mode: {mode_str}\n"
+        f"\n"
+        f"\U0001f4bc Portfolio{paper_tag}\n"
+        f"   Value: CHF {portfolio_value_chf:,.0f}\n"
+        f"   Positions: {num_positions} stocks\n"
+        f"   Cash: CHF {cash_chf:,.0f}\n"
+        f"\n"
+        f"\U0001f50c IBKR: {conn_str}\n"
+        f"\U0001f4c5 Next rebalance: {next_rebalance}\n"
+        f"\n"
+        f"{bar}"
+    )
+
+
 def format_status(
     positions: dict[str, tuple[Decimal, Decimal]],
     portfolio_value_chf: Decimal,

@@ -38,7 +38,7 @@ sudo journalctl -u ibkr-momentum-bot -f
 
 ## IB Gateway Setup
 
-The bot connects to Interactive Brokers via [IB Gateway](https://github.com/gnzsnz/ib-gateway) running in Docker. A ready-to-use docker-compose template is included in `ib-gateway/`.
+The bot connects to Interactive Brokers via [IB Gateway](https://github.com/gnzsnz/ib-gateway-docker) running in Docker. A ready-to-use docker-compose template is included in `ib-gateway/`.
 
 ```bash
 # 1. Configure credentials

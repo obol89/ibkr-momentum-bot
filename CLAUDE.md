@@ -71,6 +71,14 @@ sudo systemctl stop ibkr-momentum-bot
 sudo systemctl status ibkr-momentum-bot
 ```
 
+## Scheduled Messages
+
+- **Daily heartbeat**: 08:00 UTC, skipped on rebalance day (first trading day of month)
+  - Portfolio value, position count, cash, SPY/IEF signal, IBKR connection status
+  - Sends error alert if IBKR connection is down
+- **Monthly rebalance**: first trading day of month at configured REBALANCE_TIME
+  - Full rebalance report with buys/sells/holdings
+
 ## Telegram Commands
 
 - `/status`   - full portfolio snapshot
@@ -96,6 +104,22 @@ sudo systemctl status ibkr-momentum-bot
   connected in. Telegram command handlers must NOT call IBKR methods directly.
   Instead, bot.py caches state via `refresh_state()` (runs every 5 min on the
   scheduler thread) and command handlers read from the cache.
+
+## Claude Code Session Rules
+
+**NEVER run these commands during any Claude Code session:**
+- systemctl restart/stop/start (any service)
+- pkill, killall, kill (any process)
+- sudo commands that affect running services
+
+**After making code changes:**
+- Tell the user which service needs restarting
+- The user will run the restart manually
+- Never restart services autonomously
+
+**To test changes:**
+- Tell the user which command to run (e.g. python main.py --run-now)
+- Never execute test runs autonomously
 
 ## IB Gateway
 

@@ -1,0 +1,12 @@
+.env
+ib-gateway/.env
+data/ledger.json
+data/*.json
+logs/
+*.log
+__pycache__/
+*.pyc
+*.pid
+venv/
+.venv/
+.mypy_cache/

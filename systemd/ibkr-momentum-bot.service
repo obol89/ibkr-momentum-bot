@@ -1,0 +1,16 @@
+[Unit]
+Description=IBKR Dual Momentum Stock Bot
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/projects/ibkr-momentum-bot
+ExecStartPre=/bin/sleep 2
+ExecStart=/root/projects/ibkr-momentum-bot/venv/bin/python main.py
+Restart=always
+RestartSec=30
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

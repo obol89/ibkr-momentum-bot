@@ -515,9 +515,9 @@ class MomentumBot:
     def get_balance_text(self) -> str:
         """Generate text for /balance command from cached state."""
         summary = self._state["account_summary"]
-        lines = ["Account Balance", "=" * 30]
+        lines = ["\U0001f3e6 Account Balance", ""]
         for key, val in sorted(summary.items()):
-            lines.append(f"  {key}: {val:,.2f}")
+            lines.append(f"   {key}: {val:,.2f}")
         lines.append("")
         lines.append(self._last_updated_str())
         return "\n".join(lines)
@@ -534,11 +534,12 @@ class MomentumBot:
             signal = "MOMENTUM (would invest)"
 
         return (
-            f"Next Rebalance Preview\n"
-            f"{'=' * 30}\n"
-            f"Date: {next_date.isoformat()} at {config.REBALANCE_TIME} UTC\n"
-            f"SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
-            f"Signal: {signal}\n"
+            f"\U0001f4c5 Next Rebalance Preview\n"
+            f"\n"
+            f"   Date: {next_date.strftime('%a %d %b %Y')} at {config.REBALANCE_TIME} UTC\n"
+            f"   SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
+            f"   Signal: {signal}\n"
+            f"\n"
             f"{self._last_updated_str()}"
         )
 
@@ -548,13 +549,13 @@ class MomentumBot:
         entries = ledger.get_entries()
         last_mode = entries[-1]["mode"].upper() if entries else "N/A"
         return (
-            f"Strategy Report\n"
-            f"{'=' * 30}\n"
-            f"Strategy: Dual Momentum 6mo + 3% buffer\n"
-            f"Backtest: 20yr, ~10-11% CAGR, -46% max DD\n"
-            f"2008 result: -7.3% DD (vs SPY -55%)\n"
-            f"Current mode: {last_mode}\n"
-            f"Total rebalances: {len(entries)}\n"
-            f"Paper trading: {config.PAPER_TRADING}\n"
-            f"Next rebalance: {next_date.isoformat()} at {config.REBALANCE_TIME} UTC"
+            f"\U0001f4ca Strategy Report\n"
+            f"\n"
+            f"   Strategy: Dual Momentum 6mo + 3% buffer\n"
+            f"   Backtest: 20yr, ~10-11% CAGR, -46% max DD\n"
+            f"   2008 result: -7.3% DD (vs SPY -55%)\n"
+            f"   Current mode: {last_mode}\n"
+            f"   Total rebalances: {len(entries)}\n"
+            f"   Paper trading: {config.PAPER_TRADING}\n"
+            f"   Next rebalance: {next_date.strftime('%a %d %b %Y')} at {config.REBALANCE_TIME} UTC"
         )

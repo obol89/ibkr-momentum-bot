@@ -46,14 +46,15 @@ def send_message(text: str) -> None:
 
 def send_error(error_msg: str) -> None:
     """Send an error alert via Telegram."""
-    text = f"ERROR: IBKR Momentum Bot\n\n{error_msg}"
+    from datetime import datetime as _dt
+    ts = _dt.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+    text = f"\U0001f534 Bot Error \u2014 {ts}\n\n{error_msg}"
     send_message(text)
 
 
 # ---------------------------------------------------------------------------
 # Message formatting
 # ---------------------------------------------------------------------------
-
 
 def format_defensive_rebalance(
     rebalance_date: date,
@@ -67,21 +68,19 @@ def format_defensive_rebalance(
 ) -> str:
     """Format the monthly rebalance message for defensive mode."""
     paper_tag = " [PAPER]" if paper else ""
+    pnl_sign = "+" if total_pnl_chf >= 0 else ""
     return (
-        f"{'=' * 36}\n"
-        f"Monthly Rebalance -- {rebalance_date.strftime('%d %b %Y')}{paper_tag}\n"
-        f"{'=' * 36}\n"
-        f"DEFENSIVE MODE ACTIVATED\n"
-        f"SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
-        f"SPY < IEF - 3% buffer -> going to cash\n"
+        f"\U0001f4c5 Monthly Rebalance \u2014 {rebalance_date.strftime('%a %d %b %Y')}{paper_tag}\n"
         f"\n"
-        f"Sold all {positions_sold} positions\n"
-        f"Cash: CHF {portfolio_value_chf:,.0f}\n"
+        f"\U0001f6e1\ufe0f  DEFENSIVE MODE ACTIVATED\n"
+        f"   SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
+        f"   SPY < IEF \u2212 3% buffer \u2192 going to cash\n"
+        f"\U0001f4b0 Sold all {positions_sold} positions\n"
+        f"\U0001f4b5 Cash: CHF {portfolio_value_chf:,.0f}\n"
         f"\n"
-        f"Portfolio\n"
-        f"  Value: CHF {portfolio_value_chf:,.0f}\n"
-        f"  P&L: CHF {total_pnl_chf:+,.0f} ({total_pnl_pct:+.1f}%)\n"
-        f"{'=' * 36}"
+        f"\U0001f4ca Portfolio\n"
+        f"   Value: CHF {portfolio_value_chf:,.0f}\n"
+        f"   P&L: {pnl_sign}CHF {abs(total_pnl_chf):,.0f} ({pnl_sign}{total_pnl_pct:.1f}%)"
     )
 
 
@@ -103,33 +102,31 @@ def format_momentum_rebalance(
     paper_tag = " [PAPER]" if paper else ""
     sold_str = ", ".join(stocks_sold) if stocks_sold else "none"
     bought_str = ", ".join(stocks_bought) if stocks_bought else "none"
+    pnl_sign = "+" if total_pnl_chf >= 0 else ""
 
     top5 = ""
     for i, (sym, score) in enumerate(top_scores[:5], 1):
-        top5 += f"  {i}. {sym}  {score:+.1%} (6mo score)\n"
+        top5 += f"   {i}. {sym}  {score:+.1%} (6mo score)\n"
     remaining = total_holdings - min(5, len(top_scores))
 
     return (
-        f"{'=' * 36}\n"
-        f"Monthly Rebalance -- {rebalance_date.strftime('%d %b %Y')}{paper_tag}\n"
-        f"{'=' * 36}\n"
-        f"MOMENTUM MODE\n"
-        f"SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
-        f"Momentum confirmed\n"
+        f"\U0001f4c5 Monthly Rebalance \u2014 {rebalance_date.strftime('%a %d %b %Y')}{paper_tag}\n"
         f"\n"
-        f"Changes: {len(stocks_sold)} sold, {len(stocks_bought)} bought\n"
-        f"Sold: {sold_str}\n"
-        f"Bought: {bought_str}\n"
+        f"\U0001f680 MOMENTUM MODE\n"
+        f"   SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
+        f"   Momentum confirmed\n"
         f"\n"
-        f"Holdings (Top 5 by momentum):\n"
+        f"\U0001f504 Changes: {len(stocks_sold)} sold, {len(stocks_bought)} bought\n"
+        f"   Sold: {sold_str}\n"
+        f"   Bought: {bought_str}\n"
+        f"\U0001f4cb Holdings (Top 5 by momentum):\n"
         f"{top5}"
-        f"  ... +{remaining} more\n"
+        f"   ... +{remaining} more\n"
         f"\n"
-        f"Portfolio\n"
-        f"  Stocks: {total_holdings} | Cash: CHF {cash_chf:,.0f}\n"
-        f"  Value: CHF {portfolio_value_chf:,.0f}\n"
-        f"  P&L: CHF {total_pnl_chf:+,.0f} ({total_pnl_pct:+.1f}%)\n"
-        f"{'=' * 36}"
+        f"\U0001f4ca Portfolio\n"
+        f"   Stocks: {total_holdings} | Cash: CHF {cash_chf:,.0f}\n"
+        f"   Value: CHF {portfolio_value_chf:,.0f}\n"
+        f"   P&L: {pnl_sign}CHF {abs(total_pnl_chf):,.0f} ({pnl_sign}{total_pnl_pct:.1f}%)"
     )
 
 
@@ -142,7 +139,7 @@ def format_startup(
     """Format the startup notification."""
     paper_tag = " [PAPER]" if paper else ""
     return (
-        f"IBKR Momentum Bot started{paper_tag}\n"
+        f"\U0001f7e2 Bot started{paper_tag}\n"
         f"Mode: {mode}\n"
         f"Portfolio: CHF {portfolio_value_chf:,.0f}\n"
         f"Next rebalance: {next_rebalance}"
@@ -162,7 +159,6 @@ def format_heartbeat(
     paper: bool,
 ) -> str:
     """Format the daily heartbeat message."""
-    bar = "\u2501" * 20
     paper_tag = " [PAPER]" if paper else ""
     mode_str = "DEFENSIVE \u274c" if is_defensive else "MOMENTUM \u2705"
     conn_str = "Connected \u2705" if ibkr_connected else "DISCONNECTED \u274c"
@@ -170,9 +166,7 @@ def format_heartbeat(
     time_str = now.strftime("%H:%M UTC")
 
     return (
-        f"{bar}\n"
         f"\U0001f493 IBKR Bot \u2014 Daily Heartbeat\n"
-        f"{bar}\n"
         f"\U0001f4c5 {day_str} | {time_str}\n"
         f"\n"
         f"\U0001f4ca Market Signal\n"
@@ -185,9 +179,7 @@ def format_heartbeat(
         f"   Cash: CHF {cash_chf:,.0f}\n"
         f"\n"
         f"\U0001f50c IBKR: {conn_str}\n"
-        f"\U0001f4c5 Next rebalance: {next_rebalance}\n"
-        f"\n"
-        f"{bar}"
+        f"\U0001f4c5 Next rebalance: {next_rebalance}"
     )
 
 
@@ -202,17 +194,17 @@ def format_status(
     """Format the /status response."""
     paper_tag = " [PAPER]" if paper else ""
     lines = [
-        f"Portfolio Status{paper_tag}",
-        f"{'=' * 30}",
-        f"Value: CHF {portfolio_value_chf:,.0f}",
-        f"Cash: USD {cash_usd:,.0f} (CHF {cash_usd * usd_chf_rate:,.0f})",
-        f"USD/CHF: {usd_chf_rate:.4f}",
-        f"Positions: {len(positions)}",
+        f"\U0001f4bc Portfolio Status{paper_tag}",
+        f"",
+        f"   Value: CHF {portfolio_value_chf:,.0f}",
+        f"   Cash: USD {cash_usd:,.0f} (CHF {cash_usd * usd_chf_rate:,.0f})",
+        f"   USD/CHF: {usd_chf_rate:.4f}",
+        f"   Positions: {len(positions)}",
     ]
     if positions:
         lines.append("")
         for sym, (qty, cost) in sorted(positions.items()):
-            lines.append(f"  {sym}: {qty} shares @ ${cost:.2f}")
+            lines.append(f"   {sym}: {qty} shares @ ${cost:.2f}")
     if last_updated:
         lines.append("")
         lines.append(last_updated)
@@ -227,7 +219,7 @@ def format_holdings(
     if not positions:
         return "No current holdings."
 
-    lines = ["Current Holdings", "=" * 30]
+    lines = [f"\U0001f4cb Current Holdings", ""]
     # Sort by momentum score descending
     sorted_pos = sorted(
         positions.items(),
@@ -236,7 +228,7 @@ def format_holdings(
     )
     for sym, (qty, cost) in sorted_pos:
         score = momentum_scores.get(sym, 0)
-        lines.append(f"  {sym}: {qty} shares | score: {score:+.1%}")
+        lines.append(f"   {sym}: {qty} shares | score: {score:+.1%}")
     return "\n".join(lines)
 
 
@@ -283,7 +275,7 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     if not entries:
         await update.message.reply_text("No rebalance history yet.")
         return
-    lines = ["Last 6 Rebalances", "=" * 30]
+    lines = [f"\U0001f4dc Last 6 Rebalances"]
     for e in reversed(entries):
         mode = e.get("mode", "?")
         d = e.get("date", "?")
@@ -291,9 +283,9 @@ async def cmd_history(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
         bought = e.get("stocks_bought", [])
         lines.append(f"\n{d} | {mode.upper()}")
         if sold:
-            lines.append(f"  Sold: {', '.join(sold[:5])}")
+            lines.append(f"   Sold: {', '.join(sold[:5])}")
         if bought:
-            lines.append(f"  Bought: {', '.join(bought[:5])}")
+            lines.append(f"   Bought: {', '.join(bought[:5])}")
     await update.message.reply_text("\n".join(lines))
 
 
@@ -332,15 +324,15 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if str(update.effective_chat.id) != config.TELEGRAM_CHAT_ID:
         return
     text = (
-        f"Available Commands\n"
-        f"{'=' * 22}\n"
-        f"/status   -- Full portfolio snapshot (value, P&L, top holdings)\n"
-        f"/holdings -- All current positions with momentum scores\n"
-        f"/history  -- Last 6 monthly rebalances summary\n"
-        f"/balance  -- IBKR account cash and total value in CHF\n"
-        f"/next     -- Preview next rebalance (signal + projected portfolio)\n"
-        f"/report   -- Strategy summary and backtest stats\n"
-        f"/help     -- Show this message\n"
+        f"\u2753 Available Commands\n"
+        f"\n"
+        f"/status   \u2014 Full portfolio snapshot\n"
+        f"/holdings \u2014 Current positions with momentum scores\n"
+        f"/history  \u2014 Last 6 monthly rebalances\n"
+        f"/balance  \u2014 IBKR account cash & value in CHF\n"
+        f"/next     \u2014 Preview next rebalance signal\n"
+        f"/report   \u2014 Strategy summary & backtest stats\n"
+        f"/help     \u2014 Show this message\n"
         f"\n"
         f"Strategy: Dual Momentum 6mo + 3% buffer\n"
         f"Universe: S&P 500 + SMI (117 stocks)\n"

@@ -26,6 +26,8 @@ from portfolio import (
 
 logger = logging.getLogger(__name__)
 
+_signal_refresh_lock = threading.Lock()
+
 
 def get_first_trading_day(year: int, month: int) -> date:
     """Return the first trading day of the given month (NYSE calendar)."""
@@ -73,6 +75,7 @@ class MomentumBot:
             "last_ief_ret": 0.0,
             "is_defensive": False,
             "last_updated": None,
+            "signal_updated": None,
         }
 
     # ------------------------------------------------------------------
@@ -194,8 +197,15 @@ class MomentumBot:
             logger.error("Heartbeat FAILED: IBKR connection lost", exc_info=True)
             notifier.send_error("IBKR connection lost! Heartbeat check failed.")
 
-        # Refresh state before sending heartbeat
+        # Refresh state and fetch fresh signal before sending heartbeat
         self.refresh_state()
+        # refresh_state calls refresh_signal, but if it failed silently,
+        # try once more as a dedicated call (heartbeat runs on scheduler thread).
+        if self._state["signal_updated"] is None or (
+            datetime.utcnow() - self._state["signal_updated"]
+        ).total_seconds() > 600:
+            logger.info("Heartbeat: signal stale, forcing dedicated refresh")
+            self.refresh_signal()
 
         s = self._state
         cash_chf = s["cash_usd"] * s["usd_chf_rate"]
@@ -235,21 +245,31 @@ class MomentumBot:
         except Exception:
             logger.warning("State refresh failed", exc_info=True)
 
-        # Fetch SPY/IEF signal separately (slower, uses historical data).
-        # Failures here must not reset existing values to 0.0.
-        try:
-            self.client.ensure_connected()
-            spy_prices = self.client.get_close_prices(SPY, lookback_days=180)
-            ief_prices = self.client.get_close_prices(IEF, lookback_days=180)
-            if not spy_prices.empty and not ief_prices.empty:
-                defensive, spy_ret, ief_ret = is_defensive(spy_prices, ief_prices)
-                self._state["last_spy_ret"] = spy_ret
-                self._state["last_ief_ret"] = ief_ret
-                self._state["is_defensive"] = defensive
-                logger.debug("Signal refreshed: SPY %.1f%% IEF %.1f%% defensive=%s",
-                             spy_ret * 100, ief_ret * 100, defensive)
-        except Exception:
-            logger.warning("Signal refresh failed (keeping previous values)", exc_info=True)
+        self.refresh_signal()
+
+    def refresh_signal(self) -> None:
+        """Fetch live SPY/IEF prices from IBKR and recompute the momentum signal.
+
+        Failures do not reset existing values to 0.0 (keeps previous values).
+        Must run on the scheduler/main thread (ib_insync thread affinity).
+        """
+        with _signal_refresh_lock:
+            try:
+                self.client.ensure_connected()
+                spy_prices = self.client.get_close_prices(SPY, lookback_days=180)
+                ief_prices = self.client.get_close_prices(IEF, lookback_days=180)
+                if not spy_prices.empty and not ief_prices.empty:
+                    defensive, spy_ret, ief_ret = is_defensive(spy_prices, ief_prices)
+                    self._state["last_spy_ret"] = spy_ret
+                    self._state["last_ief_ret"] = ief_ret
+                    self._state["is_defensive"] = defensive
+                    self._state["signal_updated"] = datetime.utcnow()
+                    logger.debug("Signal refreshed: SPY %.1f%% IEF %.1f%% defensive=%s",
+                                 spy_ret * 100, ief_ret * 100, defensive)
+                else:
+                    logger.warning("Signal refresh: empty price data for SPY or IEF")
+            except Exception:
+                logger.warning("Signal refresh failed (keeping previous values)", exc_info=True)
 
     # ------------------------------------------------------------------
     # Core rebalance logic
@@ -273,6 +293,7 @@ class MomentumBot:
             self._state["last_spy_ret"] = spy_ret
             self._state["last_ief_ret"] = ief_ret
             self._state["is_defensive"] = defensive
+            self._state["signal_updated"] = datetime.utcnow()
 
             # 3. Get current positions and account info
             current_positions = self.client.get_positions()
@@ -497,6 +518,17 @@ class MomentumBot:
             return "Last updated: just now"
         return f"Last updated: {minutes}m ago"
 
+    def _signal_updated_str(self) -> str:
+        """Format 'Signal updated: X minutes ago' from _state."""
+        ts = self._state.get("signal_updated")
+        if ts is None:
+            return "Signal updated: never"
+        delta = datetime.utcnow() - ts
+        minutes = int(delta.total_seconds() / 60)
+        if minutes < 1:
+            return "Signal updated: just now"
+        return f"Signal updated: {minutes}m ago"
+
     def get_status_text(self) -> str:
         """Generate text for /status command from cached state."""
         s = self._state
@@ -540,8 +572,30 @@ class MomentumBot:
             f"   SPY 6mo: {spy_ret:+.1%} | IEF 6mo: {ief_ret:+.1%}\n"
             f"   Signal: {signal}\n"
             f"\n"
-            f"{self._last_updated_str()}"
+            f"{self._signal_updated_str()}"
         )
+
+    def schedule_signal_refresh(self) -> threading.Event:
+        """Schedule a signal refresh on the scheduler thread and return an Event.
+
+        The caller can wait on the event to know when the refresh completes.
+        This allows Telegram command handlers (which run on a different thread)
+        to trigger a fresh signal fetch without violating ib_insync thread affinity.
+        """
+        done = threading.Event()
+
+        def _do_refresh() -> None:
+            self.refresh_signal()
+            done.set()
+
+        self.scheduler.add_job(
+            _do_refresh,
+            trigger="date",  # run immediately
+            id="signal_refresh_ondemand",
+            replace_existing=True,
+            misfire_grace_time=30,
+        )
+        return done
 
     def get_report_text(self) -> str:
         """Generate text for /report command — strategy summary."""

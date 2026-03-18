@@ -300,12 +300,21 @@ async def cmd_balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 
 
 async def cmd_next(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Handle /next command — preview next rebalance."""
+    """Handle /next command — preview next rebalance with fresh signal data."""
     if str(update.effective_chat.id) != config.TELEGRAM_CHAT_ID:
         return
     if _bot_ref is None:
         await update.message.reply_text("Bot not fully initialized yet.")
         return
+
+    # Schedule a signal refresh on the scheduler thread (ib_insync thread affinity)
+    # and wait for it to complete before returning the result.
+    done = _bot_ref.schedule_signal_refresh()
+    loop = asyncio.get_event_loop()
+    refreshed = await loop.run_in_executor(None, done.wait, 30)
+    if not refreshed:
+        logger.warning("/next: signal refresh timed out after 30s, using cached data")
+
     await update.message.reply_text(_bot_ref.get_next_text())
 
 

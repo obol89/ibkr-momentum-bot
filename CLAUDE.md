@@ -101,9 +101,12 @@ sudo systemctl status ibkr-momentum-bot
   may be needed if processes were started outside systemd.
 
 - **ib_insync thread affinity**: The IB object must be used from the thread it was
-  connected in. Telegram command handlers must NOT call IBKR methods directly.
-  Instead, bot.py caches state via `refresh_state()` (runs every 5 min on the
-  scheduler thread) and command handlers read from the cache.
+  connected in. The scheduler uses `max_workers=1` and `connect()` runs inside a
+  scheduler job, so all IBKR calls (refresh, heartbeat, rebalance) share the same
+  pool thread. Telegram command handlers must NOT call IBKR methods directly —
+  they read from cached `_state`. The `/next` command triggers a signal refresh
+  via `schedule_signal_refresh()` which queues a job on the scheduler thread and
+  awaits completion.
 
 ## Claude Code Session Rules
 

@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 import pandas_market_calendars as mcal
+from apscheduler.executors.pool import ThreadPoolExecutor as APSThreadPoolExecutor
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
@@ -61,7 +62,15 @@ class MomentumBot:
 
     def __init__(self) -> None:
         self.client = IBKRClient()
-        self.scheduler = BackgroundScheduler(timezone="UTC")
+        # Single-thread executor: all jobs run on the SAME pool thread.
+        # ib_insync requires thread affinity — the IB object must be used
+        # from the thread it was connected on.  By connecting inside a
+        # scheduler job (see start()) and using max_workers=1, every
+        # subsequent job (refresh, heartbeat, rebalance) shares that thread.
+        self.scheduler = BackgroundScheduler(
+            timezone="UTC",
+            executors={"default": APSThreadPoolExecutor(max_workers=1)},
+        )
         self._last_momentum_scores: dict[str, float] = {}
         # Cached state served by Telegram command handlers (no IBKR calls
         # from command handlers — ib_insync must be used from its own thread).
@@ -86,13 +95,42 @@ class MomentumBot:
         """Initialize connections, schedule jobs, send startup notification."""
         logger.info("Starting IBKR Momentum Bot (paper=%s)", config.PAPER_TRADING)
 
-        # Connect to IBKR
-        self.client.connect()
-
         # Set up Telegram command handlers
         notifier.set_bot_reference(self)
 
-        # Schedule monthly rebalance check (runs daily, executes on first trading day)
+        # Start the scheduler FIRST — all IBKR work happens on its pool
+        # thread to maintain ib_insync thread affinity.
+        self.scheduler.start()
+
+        # Connect to IBKR from the scheduler's pool thread.
+        # With max_workers=1, this thread will be reused for ALL subsequent
+        # jobs (refresh, heartbeat, rebalance), satisfying thread affinity.
+        init_done = threading.Event()
+        init_error: list[BaseException | None] = [None]
+
+        def _init_ibkr() -> None:
+            try:
+                # Pool threads don't have an asyncio event loop by default
+                # (Python 3.10+).  ib_insync needs one for all its sync
+                # wrappers.  Setting it once here is enough because
+                # max_workers=1 reuses this same thread for every job.
+                import asyncio
+                asyncio.set_event_loop(asyncio.new_event_loop())
+
+                self.client.connect()
+                self.refresh_state()
+            except Exception as exc:
+                init_error[0] = exc
+            finally:
+                init_done.set()
+
+        self.scheduler.add_job(_init_ibkr, trigger="date", id="ibkr_init")
+        if not init_done.wait(timeout=60):
+            raise RuntimeError("IBKR initialization timed out (60s)")
+        if init_error[0]:
+            raise init_error[0]
+
+        # Schedule recurring jobs (all run on the same pool thread)
         self.scheduler.add_job(
             self._check_and_rebalance,
             CronTrigger(
@@ -105,7 +143,6 @@ class MomentumBot:
             misfire_grace_time=3600,
         )
 
-        # Daily heartbeat at 08:00 UTC
         self.scheduler.add_job(
             self._heartbeat,
             CronTrigger(hour=8, minute=0),
@@ -114,7 +151,6 @@ class MomentumBot:
             misfire_grace_time=3600,
         )
 
-        # Refresh cached state every 5 minutes (for Telegram command handlers)
         self.scheduler.add_job(
             self.refresh_state,
             "interval",
@@ -124,18 +160,11 @@ class MomentumBot:
             misfire_grace_time=60,
         )
 
-        self.scheduler.start()
         logger.info("Scheduler started with %d jobs", len(self.scheduler.get_jobs()))
 
-        # Initial state refresh
-        self.refresh_state()
-
-        # Send startup notification
+        # Send startup notification (uses cached state from _init_ibkr)
         next_rebal = get_next_rebalance_date()
-        try:
-            portfolio_value = self.client.get_portfolio_value_in_currency()
-        except Exception:
-            portfolio_value = Decimal("0")
+        portfolio_value = self._state["portfolio_value_chf"]
 
         current_mode = "PAPER" if config.PAPER_TRADING else "LIVE"
         startup_msg = notifier.format_startup(
@@ -148,7 +177,16 @@ class MomentumBot:
 
         if run_now:
             logger.info("--run-now flag set, executing immediate rebalance")
-            self._run_rebalance()
+            rebal_done = threading.Event()
+
+            def _do_rebalance() -> None:
+                self._run_rebalance()
+                rebal_done.set()
+
+            self.scheduler.add_job(
+                _do_rebalance, trigger="date", id="immediate_rebalance"
+            )
+            rebal_done.wait(timeout=600)  # rebalance can take ~10 min
 
         # Start Telegram polling in background thread (own event loop)
         tg_thread = threading.Thread(

@@ -81,6 +81,32 @@ To subscribe: IBKR Account Management > Settings > Market Data Subscriptions > s
 
 Without the Swiss subscription, the bot will skip SMI stocks silently and run on the S&P 500 universe only (still fully functional).
 
+## Scheduling
+
+The bot runs as a long-lived process with APScheduler managing all timing in UTC:
+
+| Event | When | Message |
+|-------|------|---------|
+| Startup | Every boot | Mode, portfolio value, next rebalance date |
+| Heartbeat | Daily at `HEARTBEAT_TIME` UTC | Portfolio value, positions, cash, SPY/IEF signal, connection status |
+| Rebalance | First trading day of month at `REBALANCE_TIME` UTC | Full rebalance report with buys/sells/holdings |
+
+Configure in `.env`:
+```bash
+REBALANCE_TIME=09:00     # UTC time for monthly rebalance check (days 1-7)
+HEARTBEAT_TIME=08:00     # UTC time for daily heartbeat (skipped on rebalance day)
+```
+
+### Configuration Changes Reference
+
+| Setting | Restart required? |
+|---------|-------------------|
+| `IBKR_HOST` / `IBKR_PORT` / `IBKR_CLIENT_ID` | Yes |
+| `PAPER_TRADING` | Yes |
+| `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` | Yes |
+| `REBALANCE_TIME` / `HEARTBEAT_TIME` | Yes |
+| `MONTHLY_INVESTMENT` / `PORTFOLIO_SIZE` | No |
+
 ## Requirements
 
 - Python 3.10+

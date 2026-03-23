@@ -55,9 +55,16 @@ PID_FILE: Path = Path("/tmp/ibkr-momentum-bot.pid")
 DATA_DIR.mkdir(exist_ok=True)
 LOG_DIR.mkdir(exist_ok=True)
 
+# --- Heartbeat ---
+HEARTBEAT_TIME: str = _env("HEARTBEAT_TIME", "08:00")
+
 # --- Rebalance time parsed ---
 REBALANCE_HOUR: int = int(REBALANCE_TIME.split(":")[0])
 REBALANCE_MINUTE: int = int(REBALANCE_TIME.split(":")[1])
+
+# --- Heartbeat time parsed ---
+HEARTBEAT_HOUR: int = int(HEARTBEAT_TIME.split(":")[0])
+HEARTBEAT_MINUTE: int = int(HEARTBEAT_TIME.split(":")[1])
 
 # Required env vars for verification
 REQUIRED_ENV_VARS: list[str] = [

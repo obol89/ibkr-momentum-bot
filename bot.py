@@ -145,7 +145,7 @@ class MomentumBot:
 
         self.scheduler.add_job(
             self._heartbeat,
-            CronTrigger(hour=8, minute=0),
+            CronTrigger(hour=config.HEARTBEAT_HOUR, minute=config.HEARTBEAT_MINUTE),
             id="heartbeat",
             name="Daily heartbeat",
             misfire_grace_time=3600,

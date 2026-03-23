@@ -49,7 +49,7 @@ config.py     -> all configuration from .env
 
 ## Configuration
 
-- **Restart required**: IBKR connection settings, PAPER_TRADING, Telegram tokens
+- **Restart required**: IBKR connection settings, PAPER_TRADING, Telegram tokens, REBALANCE_TIME, HEARTBEAT_TIME
 - **Hot-reload (no restart)**: MONTHLY_INVESTMENT, PORTFOLIO_SIZE (read from .env each run)
 
 ## Commands
@@ -73,7 +73,7 @@ sudo systemctl status ibkr-momentum-bot
 
 ## Scheduled Messages
 
-- **Daily heartbeat**: 08:00 UTC, skipped on rebalance day (first trading day of month)
+- **Daily heartbeat**: configured HEARTBEAT_TIME (default 08:00 UTC), skipped on rebalance day (first trading day of month)
   - Portfolio value, position count, cash, SPY/IEF signal, IBKR connection status
   - Sends error alert if IBKR connection is down
 - **Monthly rebalance**: first trading day of month at configured REBALANCE_TIME

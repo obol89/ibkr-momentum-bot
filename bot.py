@@ -118,7 +118,12 @@ class MomentumBot:
                 asyncio.set_event_loop(asyncio.new_event_loop())
 
                 self.client.connect()
-                self.refresh_state()
+                # Only fetch account state (positions, cash, etc.) during
+                # init — NOT the signal refresh.  reqHistoricalData can
+                # take 4+ minutes to fail when IBKR data service is down,
+                # which would exceed the init timeout and crash the bot.
+                # Signal refresh will happen on the first scheduled interval.
+                self._refresh_account_state()
             except Exception as exc:
                 init_error[0] = exc
             finally:
@@ -263,11 +268,11 @@ class MomentumBot:
         )
         notifier.send_message(msg)
 
-    def refresh_state(self) -> None:
-        """Fetch live data from IBKR and update cached _state.
+    def _refresh_account_state(self) -> None:
+        """Fetch account data (positions, cash, FX) from IBKR — no historical data.
 
-        Called on a 5-minute interval and after each rebalance.
-        Must run in the main/scheduler thread (same as IBKR connection).
+        Fast operation that only queries account state. Used during init
+        and called by refresh_state().
         """
         try:
             self.client.ensure_connected()
@@ -283,6 +288,13 @@ class MomentumBot:
         except Exception:
             logger.warning("State refresh failed", exc_info=True)
 
+    def refresh_state(self) -> None:
+        """Fetch live data from IBKR and update cached _state.
+
+        Called on a 5-minute interval and after each rebalance.
+        Must run in the main/scheduler thread (same as IBKR connection).
+        """
+        self._refresh_account_state()
         self.refresh_signal()
 
     def refresh_signal(self) -> None:
